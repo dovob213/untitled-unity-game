@@ -5,8 +5,8 @@ using UnityEngine.InputSystem;
 #endif
 
 /// <summary>
-/// Q, W, E, R 키 입력 및 방향키 이동 입력 감지 매니저
-/// New Input System과 Legacy Input 지원
+/// 방향키(Arrow Keys) 이동 및 왼손 Q, W, E, R 전투 액션 키 입력 감지 매니저
+/// W키 충돌을 방지하기 위해 이동은 방향키(↑↓←→)로 전담
 /// </summary>
 [DefaultExecutionOrder(-100)]
 public class InputManager : MonoBehaviour
@@ -19,7 +19,7 @@ public class InputManager : MonoBehaviour
     public static event Action<KeyCode> OnCombatKeyPressed;
 
     /// <summary>
-    /// 현재 이동 입력 벡터 (WASD / 방향키 벡터)
+    /// 현재 방향키 이동 입력 벡터 (정규화)
     /// </summary>
     public static Vector2 MoveInput { get; private set; }
 
@@ -51,14 +51,17 @@ public class InputManager : MonoBehaviour
 #if ENABLE_INPUT_SYSTEM
         if (Keyboard.current != null)
         {
-            if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) input.y += 1f;
-            if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) input.y -= 1f;
-            if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) input.x -= 1f;
-            if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) input.x += 1f;
+            // 방향키(Arrow Keys)로 회피 및 이동
+            if (Keyboard.current.upArrowKey.isPressed) input.y += 1f;
+            if (Keyboard.current.downArrowKey.isPressed) input.y -= 1f;
+            if (Keyboard.current.leftArrowKey.isPressed) input.x -= 1f;
+            if (Keyboard.current.rightArrowKey.isPressed) input.x += 1f;
         }
 #else
-        input.x = Input.GetAxisRaw("Horizontal");
-        input.y = Input.GetAxisRaw("Vertical");
+        if (Input.GetKey(KeyCode.UpArrow)) input.y += 1f;
+        if (Input.GetKey(KeyCode.DownArrow)) input.y -= 1f;
+        if (Input.GetKey(KeyCode.LeftArrow)) input.x -= 1f;
+        if (Input.GetKey(KeyCode.RightArrow)) input.x += 1f;
 #endif
 
         MoveInput = input.sqrMagnitude > 1f ? input.normalized : input;

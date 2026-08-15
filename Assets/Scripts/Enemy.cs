@@ -34,6 +34,7 @@ public class Enemy : MonoBehaviour
 
     public KeyCode TargetKey => targetKey;
     public bool IsDead => isDead;
+    public float CurrentHealth => currentHealth;
 
     private void Awake()
     {
@@ -61,6 +62,19 @@ public class Enemy : MonoBehaviour
 
     private void OnValidate()
     {
+        UpdateKeyDisplay();
+    }
+
+    /// <summary>
+    /// 스포너에서 적 생성 시 키와 스탯 동적 초기화
+    /// </summary>
+    public void Init(KeyCode key, float health = 1f)
+    {
+        targetKey = key;
+        maxHealth = health;
+        currentHealth = health;
+        isDead = false;
+        SetupKeyDisplay();
         UpdateKeyDisplay();
     }
 
@@ -105,7 +119,7 @@ public class Enemy : MonoBehaviour
         if (isDead) return;
 
         currentHealth -= damage;
-        Debug.Log($"[Enemy:{gameObject.name}] Hit by Blink Strike! Remaining HP: {currentHealth}");
+        Debug.Log($"[Enemy:{gameObject.name}] Hit! Remaining HP: {currentHealth}");
 
         if (currentHealth <= 0)
         {
@@ -132,7 +146,7 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    private void UpdateKeyDisplay()
+    public void UpdateKeyDisplay()
     {
         if (keyTextDisplay != null)
         {
