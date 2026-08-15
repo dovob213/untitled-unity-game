@@ -1,0 +1,41 @@
+# =========================================================================
+# Unity .gitattributes
+# =========================================================================
+
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# C# script files
+*.cs text diff=csharp
+
+# Unity YAML assets - enable unity yaml merge and force LF
+*.unity text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.asset text merge=unityyamlmerge eol=lf
+*.meta text merge=unityyamlmerge eol=lf
+*.mat text merge=unityyamlmerge eol=lf
+*.anim text merge=unityyamlmerge eol=lf
+*.controller text merge=unityyamlmerge eol=lf
+*.overrideController text merge=unityyamlmerge eol=lf
+*.physicMaterial text merge=unityyamlmerge eol=lf
+*.physicsMaterial2D text merge=unityyamlmerge eol=lf
+*.guiskin text merge=unityyamlmerge eol=lf
+*.mask text merge=unityyamlmerge eol=lf
+*.brush text merge=unityyamlmerge eol=lf
+*.flare text merge=unityyamlmerge eol=lf
+*.fontsettings text merge=unityyamlmerge eol=lf
+*.shadervariants text merge=unityyamlmerge eol=lf
+
+# Shaders
+*.shader text
+*.cginc text
+*.hlsl text
+*.compute text
+
+# Configs & JSON
+*.json text
+*.yaml text
+*.yml text
+*.xml text
+*.txt text
+*.md text

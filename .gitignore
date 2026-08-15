@@ -1,0 +1,88 @@
+# =========================================================================
+# Unity .gitignore (Unity 6 / 2D URP)
+# =========================================================================
+
+# --- Unity Generated Directories & Caches ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Aa]ssets/AssetStoreTools*
+
+# --- 유니티 캐시 서버 ---
+.utmp/
+.gradle/
+sysinfo.txt
+*.stackdump
+
+# --- cscode, IDE , ... ---
+.vs/
+.idea/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vsconfig
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# --- OS 특정파일 ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+[Tt]humbs.db
+[Dd]esktop.ini
+
+# --- 대용량 원본 파일 및 음원/스프라이트 제외 ---
+Assets/**/Raw/
+Assets/**/RawAssets/
+Assets/**/HeavyAssets/
+Assets/Audio/Raw/
+Assets/Sprites/Raw/
+
+# 비압축/대용량 원본 미디어 파일 포맷 
+*.psb.raw
+*.wav.raw
+*.flac
+*.aiff
+*.mov
+*.mp4
+
+# --- 백엔드, DB 등등 ... ---
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.Development.json
+appsettings.Production.json
+Assets/**/Secrets/
+Assets/Resources/Secrets/
+*.pem
+*.key
+*.pfx
+*.keystore
+
+# --- Crashlytics / Analytics / Local Config ---
+crashlytics-build.properties
