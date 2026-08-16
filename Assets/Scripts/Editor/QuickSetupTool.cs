@@ -64,6 +64,19 @@ public static class QuickSetupTool
         // Enemy 컴포넌트 추가
         Enemy enemyComp = tempEnemy.AddComponent<Enemy>();
 
+        // 투사체 프리팹 생성 및 바인딩
+        GameObject projPrefab = SetupProjectilePrefab();
+        if (projPrefab != null)
+        {
+            SerializedObject serializedEnemy = new SerializedObject(enemyComp);
+            SerializedProperty projProp = serializedEnemy.FindProperty("projectilePrefab");
+            if (projProp != null)
+            {
+                projProp.objectReferenceValue = projPrefab.GetComponent<EnemyProjectile>();
+                serializedEnemy.ApplyModifiedProperties();
+            }
+        }
+
         // 머리 위 텍스트 자식 오브젝트 생성
         GameObject textObj = new GameObject("KeyText");
         textObj.transform.SetParent(tempEnemy.transform);
@@ -86,6 +99,31 @@ public static class QuickSetupTool
 
         Debug.Log($"[QuickSetup] Enemy 프리팹 생성 완료: {prefabPath}");
         return savedPrefab;
+    }
+
+    private static GameObject SetupProjectilePrefab()
+    {
+        string projPrefabPath = "Assets/Prefabs/EnemyProjectile.prefab";
+
+        GameObject tempProj = new GameObject("EnemyProjectile");
+        tempProj.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+
+        SpriteRenderer sr = tempProj.AddComponent<SpriteRenderer>();
+        Sprite circleSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        sr.sprite = circleSprite;
+        sr.color = new Color(1f, 0.25f, 0.15f, 1f); // 붉은색 네온 탄환
+        sr.sortingOrder = 3;
+
+        CircleCollider2D col = tempProj.AddComponent<CircleCollider2D>();
+        col.isTrigger = true;
+        col.radius = 0.5f;
+
+        tempProj.AddComponent<EnemyProjectile>();
+
+        GameObject savedProjPrefab = PrefabUtility.SaveAsPrefabAsset(tempProj, projPrefabPath);
+        Object.DestroyImmediate(tempProj);
+
+        return savedProjPrefab;
     }
 
     private static void SetupManagers(GameObject enemyPrefab)

@@ -5,11 +5,17 @@ using UnityEngine;
 
 /// <summary>
 /// 2단 분리형 전투 컨트롤러 (QWER 타겟팅 -> 체공 슬로우 모션 -> ASDF 처형 버퍼링 & 역경직)
+/// 전투 실패 시 넉백 리코일 + 스턴 및 적의 즉각 반격 트리거 지원
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
 [SelectionBase]
 public class PlayerController : MonoBehaviour
 {
+    [Header("Player Stats")]
+    [SerializeField] private float maxHealth = 3f;
+    private float currentHealth;
+    private bool isDead = false;
+
     [Header("Movement Settings")]
     [Tooltip("플레이어의 기본 이동 속도 (방향키 조작)")]
     [SerializeField] private float moveSpeed = 8f;
@@ -24,7 +30,7 @@ public class PlayerController : MonoBehaviour
     [Range(0.05f, 1f)]
     [SerializeField] private float slowMoScale = 0.3f;
 
-    [Tooltip("처형 성공 시 역경직(Hit-Stop) 지속 시간 (초)")]
+    [Tooltip("처형 성공/실패 시 역경직(Hit-Stop) 지속 시간 (초)")]
     [SerializeField] private float hitStopDuration = 0.05f;
 
     [Tooltip("순간이동 기본 타격 데미지")]
@@ -33,8 +39,15 @@ public class PlayerController : MonoBehaviour
     [Tooltip("타격 시 대상 위치로부터의 오프셋")]
     [SerializeField] private Vector2 strikeOffset = Vector2.zero;
 
+    [Header("Failure Penalty (Clash & Stun)")]
+    [Tooltip("공격 실패 시 튕겨나가는 넉백 힘")]
+    [SerializeField] private float failureKnockbackForce = 14f;
+
+    [Tooltip("공격 실패 후 조작 불가 스턴 시간 (초)")]
+    [SerializeField] private float stunDuration = 0.35f;
+
     [Header("Visual Feedback")]
-    [Tooltip("플레이어 머리 위에 버퍼링된 키를 표시할 TMP 텍스트 (자동 생성)")]
+    [Tooltip("플레이어 머리 위에 버퍼링된 키를 표시할 TMP 텍스트")]
     [SerializeField] private TMP_Text bufferedKeyDisplay;
     [SerializeField] private Vector3 keyDisplayOffset = new Vector3(0, 1.2f, 0);
 
@@ -46,11 +59,15 @@ public class PlayerController : MonoBehaviour
 
     // 전투 상태 변수
     private bool isDashing = false;
+    private bool isStunned = false;
     private KeyCode? bufferedKey = null;
     private Vector3 dashStartPos;
     private Coroutine dashCoroutine;
     private Coroutine hitStopCoroutine;
+    private Coroutine stunCoroutine;
 
+    public static event Action OnPlayerDied;
+    public event Action<float> OnHealthChanged;
     public event Action<Enemy, KeyCode> OnBlinkExecuted;
     public event Action<int> OnComboChanged;
 
@@ -58,11 +75,13 @@ public class PlayerController : MonoBehaviour
     private Vector2 currentVelocity;
 
     public bool IsDashing => isDashing;
+    public bool IsStunned => isStunned;
     public int CurrentCombo => currentCombo;
-    public KeyCode? BufferedKey => bufferedKey;
+    public float CurrentHealth => currentHealth;
 
     private void Awake()
     {
+        currentHealth = maxHealth;
         rb = GetComponent<Rigidbody2D>();
         ConfigureRigidbody();
         SetupBufferedKeyDisplay();
@@ -78,7 +97,6 @@ public class PlayerController : MonoBehaviour
     {
         InputManager.OnTargetKeyPressed -= HandleTargetKey;
         InputManager.OnAttackKeyPressed -= HandleAttackBufferInput;
-        // 안전하게 TimeScale 원복
         Time.timeScale = 1.0f;
     }
 
@@ -89,7 +107,8 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (!isDashing)
+        // 돌진 중이거나 스턴(넉백) 상태가 아닐 때만 방향키 이동 적용
+        if (!isDashing && !isStunned && !isDead)
         {
             HandleSmoothMovement();
         }
@@ -97,8 +116,10 @@ public class PlayerController : MonoBehaviour
 
     private void ConfigureRigidbody()
     {
+        // 넉백 물리(AddForce)를 받기 위해 Dynamic 유지
         rb.bodyType = RigidbodyType2D.Dynamic;
         rb.gravityScale = 0f;
+        rb.linearDamping = 4f; // 넉백 후 자연스럽게 감속
         rb.freezeRotation = true;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         rb.interpolation = RigidbodyInterpolation2D.Interpolate;
@@ -124,7 +145,7 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     private void HandleTargetKey(KeyCode key)
     {
-        if (isDashing) return;
+        if (isDashing || isStunned || isDead) return;
 
         Enemy targetEnemy = Enemy.FindTargetByKey(key, transform.position);
 
@@ -144,7 +165,7 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     private void HandleAttackBufferInput(KeyCode key)
     {
-        if (isDashing)
+        if (isDashing && !isDead)
         {
             bufferedKey = key;
             ShowBufferedKeyPopup(key);
@@ -164,7 +185,7 @@ public class PlayerController : MonoBehaviour
         bufferedKey = null;
         HideBufferedKeyPopup();
 
-        // 1. 체공 시작 시 타임 슬로우 (Bullet Time)
+        // 1. 체공 시작 시 타임 슬로우 (Bullet Time: 0.3x)
         Time.timeScale = slowMoScale;
 
         dashStartPos = transform.position;
@@ -204,12 +225,12 @@ public class PlayerController : MonoBehaviour
         dashCoroutine = null;
         HideBufferedKeyPopup();
 
-        // [3단계: 도착 및 처형 분기 실행]
+        // [3단계: 도착 및 처형 분기 / 실패 판정]
         ExecuteBufferedAttack(target);
     }
 
     /// <summary>
-    /// [3단계 & 4단계: 도착 및 처형 분기 / 역경직 처리]
+    /// [3단계 & 4단계: 도착 및 처형 분기 / 전투 실패 넉백 및 적 즉각 반격]
     /// </summary>
     private void ExecuteBufferedAttack(Enemy target)
     {
@@ -219,16 +240,34 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        // 아무 키도 입력하지 않은 경우 (공격 실패)
+        Vector2 dashDir = ((Vector2)target.transform.position - (Vector2)dashStartPos).normalized;
+        if (dashDir.sqrMagnitude < 0.01f) dashDir = transform.up;
+
+        // [전투 실패 케이스: 버퍼에 아무 키도 없음]
         if (!bufferedKey.HasValue)
         {
             ResetCombo();
-            Debug.Log("<color=#FF4444>[Attack: FAIL] 챙! 공격 타이밍을 놓쳐 튕겨나감!</color>");
+            Debug.Log("<color=#FF4444>[Attack: FAIL] 챙! 튕겨나감! (Stun & Knockback)</color>");
 
-            // 튕겨나가는 넉백 리코일
+            // 1. 역경직 (챙! 하는 느낌)
+            TriggerHitStop(hitStopDuration);
+
+            // 2. 물리 넉백 계산 및 적용 (적 반대 방향)
             Vector2 recoilDir = ((Vector2)transform.position - (Vector2)target.transform.position).normalized;
-            if (recoilDir.sqrMagnitude < 0.01f) recoilDir = -transform.up;
-            transform.position += (Vector3)(recoilDir * 1.2f);
+            if (recoilDir.sqrMagnitude < 0.01f) recoilDir = -dashDir;
+
+#if UNITY_6000_0_OR_NEWER
+            rb.linearVelocity = Vector2.zero;
+#else
+            rb.velocity = Vector2.zero;
+#endif
+            rb.AddForce(recoilDir * failureKnockbackForce, ForceMode2D.Impulse);
+
+            // 3. 0.35초간 조작 불가 스턴
+            StartStun(stunDuration);
+
+            // 4. 적의 즉각 반격 트리거 (튕겨나간 플레이어를 향해 즉시 탄환 발사!)
+            target.TriggerImmediateCounterAttack();
             return;
         }
 
@@ -238,9 +277,6 @@ public class PlayerController : MonoBehaviour
         currentCombo++;
         lastHitTime = Time.time;
         OnComboChanged?.Invoke(currentCombo);
-
-        Vector2 dashDir = ((Vector2)target.transform.position - (Vector2)dashStartPos).normalized;
-        if (dashDir.sqrMagnitude < 0.01f) dashDir = transform.up;
 
         // ASDF 처형 분기
         switch (attackKey)
@@ -288,7 +324,50 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 처형 성공 시 0.05초간 멈추는 역경직(Hit-Stop) 발동
+    /// 공격 실패 시 플레이어 조작 불가 스턴 코루틴
+    /// </summary>
+    private void StartStun(float duration)
+    {
+        if (stunCoroutine != null) StopCoroutine(stunCoroutine);
+        stunCoroutine = StartCoroutine(StunRoutine(duration));
+    }
+
+    private IEnumerator StunRoutine(float duration)
+    {
+        isStunned = true;
+        yield return new WaitForSeconds(duration);
+        isStunned = false;
+        stunCoroutine = null;
+    }
+
+    /// <summary>
+    /// 투사체에 피격되었을 때 데미지 처리
+    /// </summary>
+    public void TakeDamage(float damage)
+    {
+        if (isDead) return;
+
+        currentHealth -= damage;
+        Debug.Log($"[PlayerController] <color=#FF2222>💥 [DAMAGE] Hit by projectile!</color> Remaining HP: {currentHealth}/{maxHealth}");
+        OnHealthChanged?.Invoke(currentHealth);
+
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    private void Die()
+    {
+        if (isDead) return;
+        isDead = true;
+
+        Debug.Log("<color=#FF0000>💀 [GAME OVER] Player was killed by enemy projectiles! 💀</color>");
+        OnPlayerDied?.Invoke();
+    }
+
+    /// <summary>
+    /// 처형 성공/실패 시 0.05초간 멈추는 역경직(Hit-Stop) 발동
     /// </summary>
     private void TriggerHitStop(float duration)
     {

@@ -69,6 +69,13 @@ public class Enemy : MonoBehaviour
     private float currentHealth;
     private bool isDead = false;
 
+    [Header("Ranged Attack Settings")]
+    [Tooltip("적이 발사할 투사체 프리팹")]
+    [SerializeField] private EnemyProjectile projectilePrefab;
+    [SerializeField] private float attackInterval = 1.8f;
+    [SerializeField] private float projectileSpeed = 3.5f;
+    private float nextAttackTime = 0f;
+
     private Transform playerTransform;
     private float alertTimer = 0f;
     private Vector2 patrolDirection;
@@ -247,6 +254,72 @@ public class Enemy : MonoBehaviour
         if (targetMovement.sqrMagnitude > 1f) targetMovement.Normalize();
 
         transform.position += (Vector3)targetMovement * (chaseSpeed * Time.deltaTime);
+
+        // 3. 발각(Chase) 상태일 때 주기적으로 플레이어를 향해 투사체 발사 (1.5~2.0초 간격)
+        if (Time.time >= nextAttackTime)
+        {
+            FireProjectile();
+            nextAttackTime = Time.time + attackInterval + UnityEngine.Random.Range(-0.2f, 0.3f);
+        }
+    }
+
+    /// <summary>
+    /// 플레이어 방향으로 투사체 1발 발사
+    /// </summary>
+    public void FireProjectile()
+    {
+        if (isDead || playerTransform == null) return;
+
+        Vector2 dir = ((Vector2)playerTransform.position - (Vector2)transform.position).normalized;
+        Vector3 spawnPos = transform.position + (Vector3)(dir * 0.7f);
+
+        EnemyProjectile projInstance;
+
+        if (projectilePrefab != null)
+        {
+            projInstance = Instantiate(projectilePrefab, spawnPos, Quaternion.identity);
+        }
+        else
+        {
+            // 프리팹 미할당 시 원형 스프라이트 투사체 동적 생성 (안전 Fallback)
+            GameObject fallbackProj = new GameObject("EnemyProjectile");
+            fallbackProj.transform.position = spawnPos;
+            fallbackProj.transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+
+            SpriteRenderer sr = fallbackProj.AddComponent<SpriteRenderer>();
+            sr.color = new Color(1f, 0.2f, 0.2f, 1f); // 붉은색 탄환
+            sr.sortingOrder = 3;
+
+            CircleCollider2D col = fallbackProj.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius = 0.5f;
+
+            projInstance = fallbackProj.AddComponent<EnemyProjectile>();
+        }
+
+        projInstance.Init(dir, projectileSpeed, 1f);
+    }
+
+    /// <summary>
+    /// 플레이어가 처형 공격을 실패했을 때, 튕겨나간 플레이어를 향해 즉각 반격 발사
+    /// </summary>
+    public void TriggerImmediateCounterAttack()
+    {
+        if (isDead) return;
+        StopCoroutine(nameof(ImmediateCounterAttackRoutine));
+        StartCoroutine(nameof(ImmediateCounterAttackRoutine));
+    }
+
+    private System.Collections.IEnumerator ImmediateCounterAttackRoutine()
+    {
+        // 튕겨나간 직후 0.15초 뒤 즉시 반격 탄환 발사
+        yield return new WaitForSeconds(0.15f);
+        if (!isDead)
+        {
+            FireProjectile();
+            nextAttackTime = Time.time + attackInterval;
+            Debug.Log($"[Enemy:{name}] <color=#FF2222>⚡ [COUNTER ATTACK] 튕겨나간 플레이어에게 즉각 반격 탄환 발사!</color>");
+        }
     }
 
     /// <summary>
