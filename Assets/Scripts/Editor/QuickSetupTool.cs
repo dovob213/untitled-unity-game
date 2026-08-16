@@ -134,6 +134,9 @@ public static class QuickSetupTool
             playerObj = new GameObject("Player");
         }
 
+        // 혹시 남아있을 수 있는 Missing Script 컴포넌트 자동 정리
+        GameObjectUtility.RemoveMonoBehavioursWithMissingScript(playerObj);
+
         playerObj.transform.position = Vector3.zero;
         playerObj.transform.localScale = Vector3.one;
 

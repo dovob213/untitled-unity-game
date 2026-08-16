@@ -207,10 +207,94 @@ public class Enemy : MonoBehaviour
 
     private void HandleChase()
     {
-        // 플레이어를 향해 빠른 속도로 추격
         LookAtPlayer();
-        Vector2 dirToPlayer = ((Vector2)playerTransform.position - (Vector2)transform.position).normalized;
-        transform.position += (Vector3)dirToPlayer * (chaseSpeed * Time.deltaTime);
+
+        if (playerTransform == null) return;
+
+        Vector2 myPos = transform.position;
+        Vector2 playerPos = playerTransform.position;
+        Vector2 toPlayer = playerPos - myPos;
+        float currentDist = toPlayer.magnitude;
+        Vector2 dirToPlayer = currentDist > 0.01f ? toPlayer / currentDist : Vector2.up;
+
+        float preferredDist = GetPreferredCombatDistance();
+
+        // 1. 키별 고유 유지 거리에 따른 전진/후퇴/선회 이동
+        Vector2 targetMovement = Vector2.zero;
+
+        if (currentDist > preferredDist + 0.6f)
+        {
+            // 너무 멀면 전진
+            targetMovement += dirToPlayer;
+        }
+        else if (currentDist < preferredDist - 0.6f)
+        {
+            // 너무 가까우면 거리 벌리기
+            targetMovement -= dirToPlayer * 0.7f;
+        }
+        else
+        {
+            // 적정 거리 도달 시 플레이어 주변을 시계/반시계 방향으로 선회(Strafe)하여 포위
+            Vector2 strafeDir = new Vector2(-dirToPlayer.y, dirToPlayer.x);
+            float strafeSign = (targetKey == KeyCode.W || targetKey == KeyCode.R) ? 1f : -1f;
+            targetMovement += strafeDir * (strafeSign * 0.6f);
+        }
+
+        // 2. Separation (적들끼리 한 점으로 겹치지 않도록 밀어내는 반발력)
+        Vector2 separation = CalculateSeparationForce();
+        targetMovement += separation * 1.5f;
+
+        if (targetMovement.sqrMagnitude > 1f) targetMovement.Normalize();
+
+        transform.position += (Vector3)targetMovement * (chaseSpeed * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// 적 종류(Q, W, E, R)별 플레이어와의 고유 유지 거리
+    /// </summary>
+    private float GetPreferredCombatDistance()
+    {
+        return targetKey switch
+        {
+            KeyCode.Q => 1.8f, // Q: 근접 돌격형 (1.8m)
+            KeyCode.W => 3.2f, // W: 미들 레인지 (3.2m)
+            KeyCode.E => 5.5f, // E: 원거리 저격/견제 (5.5m)
+            KeyCode.R => 4.0f, // R: 포위 서클러 (4.0m)
+            _ => 2.5f
+        };
+    }
+
+    /// <summary>
+    /// 주변 다른 적들과의 거리 계산을 통한 겹침 방지 반발력(Separation) 산출
+    /// </summary>
+    private Vector2 CalculateSeparationForce()
+    {
+        Vector2 separation = Vector2.zero;
+        int neighborCount = 0;
+        float separationRadius = 1.8f;
+
+        for (int i = 0; i < activeEnemies.Count; i++)
+        {
+            Enemy other = activeEnemies[i];
+            if (other == null || other == this || other.isDead) continue;
+
+            Vector2 diff = (Vector2)transform.position - (Vector2)other.transform.position;
+            float dist = diff.magnitude;
+
+            if (dist > 0.001f && dist < separationRadius)
+            {
+                // 가까울수록 더 강한 반발력 적용
+                separation += (diff / dist) * ((separationRadius - dist) / separationRadius);
+                neighborCount++;
+            }
+        }
+
+        if (neighborCount > 0)
+        {
+            separation /= neighborCount;
+        }
+
+        return separation;
     }
 
     private void LookAtPlayer()
@@ -427,6 +511,46 @@ public class Enemy : MonoBehaviour
         if (keyTextDisplay == null)
         {
             keyTextDisplay = GetComponentInChildren<TMP_Text>();
+        }
+    }
+
+    private void LateUpdate()
+    {
+        ResolveOverlappingTextOffsets();
+    }
+
+    /// <summary>
+    /// 근접한 적들 간의 머리 위 문자 UI 겹침 방지 및 절대 회전 고정 (회전 방지)
+    /// </summary>
+    public static void ResolveOverlappingTextOffsets()
+    {
+        for (int i = 0; i < activeEnemies.Count; i++)
+        {
+            Enemy enemyA = activeEnemies[i];
+            if (enemyA == null || enemyA.isDead || enemyA.keyTextDisplay == null) continue;
+
+            // 1. 적이 회전해도 글자는 항상 정면(0도)을 바라보도록 회전 고정
+            enemyA.keyTextDisplay.transform.rotation = Quaternion.identity;
+
+            float dynamicOffsetY = enemyA.textOffset.y;
+            float dynamicOffsetX = enemyA.textOffset.x;
+
+            for (int j = 0; j < activeEnemies.Count; j++)
+            {
+                if (i == j) continue;
+                Enemy enemyB = activeEnemies[j];
+                if (enemyB == null || enemyB.isDead) continue;
+
+                float dist = Vector2.Distance(enemyA.transform.position, enemyB.transform.position);
+                // 1.8m 이내로 근접한 경우 텍스트를 위/옆으로 분산
+                if (dist < 1.8f && i > j)
+                {
+                    dynamicOffsetY += 0.5f;
+                    dynamicOffsetX += (enemyA.transform.position.x >= enemyB.transform.position.x) ? 0.35f : -0.35f;
+                }
+            }
+
+            enemyA.keyTextDisplay.transform.position = enemyA.transform.position + new Vector3(dynamicOffsetX, dynamicOffsetY, 0f);
         }
     }
 
