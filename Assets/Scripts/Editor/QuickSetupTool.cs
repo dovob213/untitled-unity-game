@@ -28,7 +28,7 @@ public static class QuickSetupTool
         // 2. Enemy 프리팹 자동 생성/갱신
         GameObject enemyPrefab = SetupEnemyPrefab();
 
-        // 3. 씬의 @Managers 생성 및 세팅
+        // 3. 씬의 @Managers 생성 및 세팅 (InputManager, WaveManager, AlarmUIManager)
         SetupManagers(enemyPrefab);
 
         // 4. 씬의 Player 생성 및 세팅
@@ -57,7 +57,7 @@ public static class QuickSetupTool
         // 내장 2D 스프라이트(Triangle 또는 Knob) 로드
         Sprite triangleSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
         sr.sprite = triangleSprite;
-        sr.color = new Color(1f, 0.3f, 0.3f); // 네온 레드/오렌지
+        sr.color = new Color(1f, 0.35f, 0.35f); // 기본 오렌지레드
         sr.sortingOrder = 1;
         tempEnemy.transform.localScale = new Vector3(1.2f, 1.2f, 1f);
 
@@ -108,6 +108,12 @@ public static class QuickSetupTool
             waveManager = managersObj.AddComponent<WaveManager>();
         }
 
+        // AlarmUIManager 확인 및 추가
+        if (!managersObj.TryGetComponent<AlarmUIManager>(out _))
+        {
+            managersObj.AddComponent<AlarmUIManager>();
+        }
+
         // Enemy Prefab 바인딩
         if (enemyPrefab != null)
         {
@@ -117,7 +123,7 @@ public static class QuickSetupTool
             serializedWave.ApplyModifiedProperties();
         }
 
-        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager) 구성 완료");
+        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager, AlarmUIManager) 구성 완료");
     }
 
     private static void SetupPlayer()
