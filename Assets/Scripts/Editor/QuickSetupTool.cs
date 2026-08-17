@@ -153,10 +153,29 @@ public static class QuickSetupTool
         sTrig.FindProperty("entranceDoorToClose").objectReferenceValue = doorCtrl;
         sTrig.ApplyModifiedProperties();
 
+        // 5. Stage Exit Trigger 생성 (X: 16, Y: 0 - B방 안쪽 탈출구)
+        GameObject exitObj = new GameObject("Stage_Exit");
+        exitObj.transform.SetParent(stageRoot.transform);
+        exitObj.transform.position = new Vector3(16f, 0f, 0f);
+        exitObj.transform.localScale = new Vector3(1.2f, 3f, 1f);
+
+        SpriteRenderer exitSr = exitObj.AddComponent<SpriteRenderer>();
+        exitSr.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+        exitSr.color = new Color(0.5f, 0.5f, 0.5f, 0.4f); // 잠김 상태: 반투명 그레이
+        exitSr.sortingOrder = 1;
+
+        BoxCollider2D exitCol = exitObj.AddComponent<BoxCollider2D>();
+        exitCol.isTrigger = true;
+
+        StageExitTrigger exitTrig = exitObj.AddComponent<StageExitTrigger>();
+        SerializedObject sExit = new SerializedObject(exitTrig);
+        sExit.FindProperty("requiredFinalRoom").objectReferenceValue = roomBMgr;
+        sExit.ApplyModifiedProperties();
+
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
-        Debug.Log("<color=#00FFAA>[QuickSetup] ✅ 2-Room Stage 구성 완료! (A방 적 처치 -> 문 개방 -> B방 진입 시 문 폐쇄 & 전투)</color>");
-        EditorUtility.DisplayDialog("2-Room Stage Setup", "✅ [A방 -> 문 -> B방] 핫라인 마이애미식 스테이지가 생성되었습니다!\nPlay(▶)를 누르면 바로 테스트할 수 있습니다.", "확인");
+        Debug.Log("<color=#00FFAA>[QuickSetup] ✅ 2-Room Stage 구성 완료! (A방 적 처치 -> 문 개방 -> B방 진입 시 문 폐쇄 & 전투 -> B방 클리어 후 탈출구 도달)</color>");
+        EditorUtility.DisplayDialog("2-Room Stage Setup", "✅ [A방 -> 문 -> B방 -> 탈출구] 스테이지가 생성되었습니다!\nPlay(▶)를 누르면 바로 테스트할 수 있습니다.", "확인");
     }
 
     private static GameObject SetupEnemyPrefab()
@@ -272,6 +291,12 @@ public static class QuickSetupTool
             managersObj.AddComponent<CameraShakeManager>();
         }
 
+        // GameManager 확인 및 추가
+        if (!managersObj.TryGetComponent<GameManager>(out _))
+        {
+            managersObj.AddComponent<GameManager>();
+        }
+
         // Enemy Prefab 바인딩
         if (enemyPrefab != null)
         {
@@ -281,7 +306,7 @@ public static class QuickSetupTool
             serializedWave.ApplyModifiedProperties();
         }
 
-        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager, AlarmUIManager, CameraShakeManager) 구성 완료");
+        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager, AlarmUIManager, CameraShakeManager, GameManager) 구성 완료");
     }
 
     private static void SetupPlayer()
