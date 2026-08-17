@@ -84,7 +84,7 @@ SpriteRenderer:
   m_SortingOrder: 1
   m_MaskInteraction: 0
   m_Sprite: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
-  m_Color: {r: 1, g: 0.3, b: 0.3, a: 1}
+  m_Color: {r: 1, g: 0.35, b: 0.35, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -106,10 +106,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f996adc5f417d4a3fbae2176c791ad0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Enemy
+  currentState: 0
+  patrolSpeed: 2
+  chaseSpeed: 4.5
+  alertDelay: 0.4
+  viewRadius: 5.5
+  viewAngle: 90
+  obstacleLayer:
+    serializedVersion: 2
+    m_Bits: 0
   targetKey: 113
   keyTextDisplay: {fileID: 0}
   textOffset: {x: 0, y: 1.2, z: 0}
+  spriteRenderer: {fileID: 0}
   maxHealth: 1
+  projectilePrefab: {fileID: 2469508483415249028, guid: a321bd61cfc9c48b0b546891c6f8d533, type: 3}
+  attackInterval: 1.8
+  projectileSpeed: 3.5
 --- !u!1 &8294446786506713491
 GameObject:
   m_ObjectHideFlags: 0

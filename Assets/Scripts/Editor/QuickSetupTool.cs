@@ -12,7 +12,7 @@ using UnityEngine.Rendering.Universal;
 /// </summary>
 public static class QuickSetupTool
 {
-    [MenuItem("Tools/⚡ 1-Click Game Setup", false, 1)]
+    [MenuItem("Tools/⚡ 1-Click Game Setup (Wave Mode)", false, 1)]
     public static void SetupGameSceneAndPrefabs()
     {
         Debug.Log("<color=#00FFAA>========================================</color>");
@@ -43,7 +43,120 @@ public static class QuickSetupTool
         Debug.Log("<color=#00FFAA>[QuickSetup] ✅ 1-Click 자동 셋업 완료! 바로 Play(▶)를 누르세요.</color>");
         Debug.Log("<color=#00FFAA>========================================</color>");
 
-        EditorUtility.DisplayDialog("1-Click Game Setup", "✅ 세팅이 완벽하게 완료되었습니다!\n상단의 Play(▶) 버튼을 누르면 바로 게임을 플레이할 수 있습니다.", "확인");
+        EditorUtility.DisplayDialog("1-Click Game Setup", "✅ 웨이브 모드 세팅이 완료되었습니다!\nPlay(▶)를 누르면 바로 웨이브 전투를 즐길 수 있습니다.", "확인");
+    }
+
+    [MenuItem("Tools/🏰 1-Click 2-Room Stage Setup (A방 -> 문 -> B방)", false, 2)]
+    public static void SetupTwoRoomStage()
+    {
+        Debug.Log("<color=#FFAA00>[QuickSetup] 🏰 2개 방(A방 -> 문 -> B방) 스테이지 자동 생성 시작...</color>");
+
+        GameObject enemyPrefab = SetupEnemyPrefab();
+        SetupManagers(null); // 방 단위 모드이므로 WaveManager의 자동 스폰은 비활성화
+        WaveManager wm = Object.FindFirstObjectByType<WaveManager>();
+        if (wm != null) wm.enabled = false;
+
+        SetupPlayer();
+        CleanupAndVerifyScene();
+
+        Camera cam = Camera.main;
+        if (cam != null)
+        {
+            cam.orthographicSize = 9f; // 2개 방을 한눈에 볼 수 있도록 시야 확대
+            cam.transform.position = new Vector3(6f, 0f, -10f);
+        }
+
+        // 기존 스테이지 오브젝트 정리
+        GameObject oldStage = GameObject.Find("Stage_Root");
+        if (oldStage != null) Object.DestroyImmediate(oldStage);
+
+        GameObject stageRoot = new GameObject("Stage_Root");
+
+        // 1. Room A 생성 (좌측 방: X: 0, Y: 0)
+        GameObject roomAObj = new GameObject("Room_A");
+        roomAObj.transform.SetParent(stageRoot.transform);
+        roomAObj.transform.position = Vector3.zero;
+        RoomManager roomAMgr = roomAObj.AddComponent<RoomManager>();
+        SerializedObject sRoomA = new SerializedObject(roomAMgr);
+        sRoomA.FindProperty("roomName").stringValue = "Room A (시작 구역)";
+        sRoomA.FindProperty("autoActivateOnStart").boolValue = true;
+        sRoomA.ApplyModifiedProperties();
+
+        // Room A 적 2마리 배치 (Q, W)
+        GameObject enemyQ = PrefabUtility.InstantiatePrefab(enemyPrefab) as GameObject;
+        enemyQ.name = "Enemy_Q";
+        enemyQ.transform.SetParent(roomAObj.transform);
+        enemyQ.transform.position = new Vector3(3f, 2f, 0f);
+        enemyQ.GetComponent<Enemy>().Init(KeyCode.Q);
+
+        GameObject enemyW = PrefabUtility.InstantiatePrefab(enemyPrefab) as GameObject;
+        enemyW.name = "Enemy_W";
+        enemyW.transform.SetParent(roomAObj.transform);
+        enemyW.transform.position = new Vector3(3f, -2f, 0f);
+        enemyW.GetComponent<Enemy>().Init(KeyCode.W);
+
+        // 2. Door A->B 생성 (X: 6, Y: 0)
+        GameObject doorObj = new GameObject("Door_AB");
+        doorObj.transform.SetParent(stageRoot.transform);
+        doorObj.transform.position = new Vector3(6f, 0f, 0f);
+        doorObj.transform.localScale = new Vector3(0.6f, 4f, 1f);
+
+        SpriteRenderer doorSr = doorObj.AddComponent<SpriteRenderer>();
+        doorSr.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+        doorSr.color = new Color(0.9f, 0.4f, 0.1f); // 주황색 철문
+        doorSr.sortingOrder = 2;
+
+        BoxCollider2D doorCol = doorObj.AddComponent<BoxCollider2D>();
+        doorCol.size = Vector2.one;
+
+        DoorController doorCtrl = doorObj.AddComponent<DoorController>();
+        SerializedObject sDoor = new SerializedObject(doorCtrl);
+        sDoor.FindProperty("targetRoom").objectReferenceValue = roomAMgr;
+        sDoor.FindProperty("openSlideOffset").vector2Value = new Vector2(0f, 4f);
+        sDoor.ApplyModifiedProperties();
+
+        // 3. Room B 생성 (우측 방: X: 12, Y: 0)
+        GameObject roomBObj = new GameObject("Room_B");
+        roomBObj.transform.SetParent(stageRoot.transform);
+        roomBObj.transform.position = new Vector3(12f, 0f, 0f);
+        RoomManager roomBMgr = roomBObj.AddComponent<RoomManager>();
+        SerializedObject sRoomB = new SerializedObject(roomBMgr);
+        sRoomB.FindProperty("roomName").stringValue = "Room B (보스/후속 구역)";
+        sRoomB.FindProperty("autoActivateOnStart").boolValue = false;
+        sRoomB.ApplyModifiedProperties();
+
+        // Room B 적 2마리 배치 (E, R)
+        GameObject enemyE = PrefabUtility.InstantiatePrefab(enemyPrefab) as GameObject;
+        enemyE.name = "Enemy_E";
+        enemyE.transform.SetParent(roomBObj.transform);
+        enemyE.transform.position = new Vector3(12f, 2.5f, 0f);
+        enemyE.GetComponent<Enemy>().Init(KeyCode.E);
+
+        GameObject enemyR = PrefabUtility.InstantiatePrefab(enemyPrefab) as GameObject;
+        enemyR.name = "Enemy_R";
+        enemyR.transform.SetParent(roomBObj.transform);
+        enemyR.transform.position = new Vector3(12f, -2.5f, 0f);
+        enemyR.GetComponent<Enemy>().Init(KeyCode.R);
+
+        // 4. Room B 입구 트리거 생성 (X: 7.5, Y: 0)
+        GameObject triggerObj = new GameObject("Trigger_RoomB");
+        triggerObj.transform.SetParent(stageRoot.transform);
+        triggerObj.transform.position = new Vector3(7.5f, 0f, 0f);
+
+        BoxCollider2D trigCol = triggerObj.AddComponent<BoxCollider2D>();
+        trigCol.size = new Vector2(3f, 8f);
+        trigCol.isTrigger = true;
+
+        RoomTrigger roomTrig = triggerObj.AddComponent<RoomTrigger>();
+        SerializedObject sTrig = new SerializedObject(roomTrig);
+        sTrig.FindProperty("roomToActivate").objectReferenceValue = roomBMgr;
+        sTrig.FindProperty("entranceDoorToClose").objectReferenceValue = doorCtrl;
+        sTrig.ApplyModifiedProperties();
+
+        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+
+        Debug.Log("<color=#00FFAA>[QuickSetup] ✅ 2-Room Stage 구성 완료! (A방 적 처치 -> 문 개방 -> B방 진입 시 문 폐쇄 & 전투)</color>");
+        EditorUtility.DisplayDialog("2-Room Stage Setup", "✅ [A방 -> 문 -> B방] 핫라인 마이애미식 스테이지가 생성되었습니다!\nPlay(▶)를 누르면 바로 테스트할 수 있습니다.", "확인");
     }
 
     private static GameObject SetupEnemyPrefab()
@@ -187,6 +300,15 @@ public static class QuickSetupTool
         sr.sprite = squareSprite;
         sr.color = new Color(0f, 0.9f, 1f); // 네온 사이언
         sr.sortingOrder = 2;
+
+        // Collider2D 추가 (트리거 및 충돌 판정용)
+        if (!playerObj.TryGetComponent<CircleCollider2D>(out var col))
+        {
+            col = playerObj.AddComponent<CircleCollider2D>();
+            col.radius = 0.5f;
+            col.isTrigger = false;
+        }
+        playerObj.tag = "Player";
 
         // PlayerController & SkillModuleSystem
         if (!playerObj.TryGetComponent<PlayerController>(out _))

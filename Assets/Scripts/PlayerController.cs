@@ -8,6 +8,7 @@ using UnityEngine;
 /// 전투 실패 시 넉백 리코일 + 스턴 및 적의 즉각 반격 트리거 지원
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(CircleCollider2D))]
 [SelectionBase]
 public class PlayerController : MonoBehaviour
 {
