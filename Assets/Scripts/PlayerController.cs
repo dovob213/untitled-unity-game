@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 2단 분리형 전투 컨트롤러 (QWER 타겟팅 -> 체공 슬로우 모션 -> ASDF 처형 버퍼링 & 역경직)
-/// 전투 실패 시 넉백 리코일 + 스턴 및 적의 즉각 반격 트리거 지원
+/// 카메라 쉐이크, 피격 플래시(FlashEffect), 대시 잔상 궤적(TrailRenderer) 시각 효과 통합
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(CircleCollider2D))]
@@ -47,7 +47,9 @@ public class PlayerController : MonoBehaviour
     [Tooltip("공격 실패 후 조작 불가 스턴 시간 (초)")]
     [SerializeField] private float stunDuration = 0.35f;
 
-    [Header("Visual Feedback")]
+    [Header("Visual Feedback (Trail & Popup)")]
+    [Tooltip("체공(Dash) 시 활성화되는 잔상 궤적 렌더러")]
+    [SerializeField] private TrailRenderer dashTrail;
     [Tooltip("플레이어 머리 위에 버퍼링된 키를 표시할 TMP 텍스트")]
     [SerializeField] private TMP_Text bufferedKeyDisplay;
     [SerializeField] private Vector3 keyDisplayOffset = new Vector3(0, 1.2f, 0);
@@ -74,6 +76,7 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Vector2 currentVelocity;
+    private FlashEffect flashEffect;
 
     public bool IsDashing => isDashing;
     public bool IsStunned => isStunned;
@@ -84,8 +87,12 @@ public class PlayerController : MonoBehaviour
     {
         currentHealth = maxHealth;
         rb = GetComponent<Rigidbody2D>();
+        flashEffect = GetComponent<FlashEffect>();
+        if (flashEffect == null) flashEffect = gameObject.AddComponent<FlashEffect>();
+
         ConfigureRigidbody();
         SetupBufferedKeyDisplay();
+        SetupDashTrail();
     }
 
     private void OnEnable()
@@ -108,7 +115,6 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // 돌진 중이거나 스턴(넉백) 상태가 아닐 때만 방향키 이동 적용
         if (!isDashing && !isStunned && !isDead)
         {
             HandleSmoothMovement();
@@ -117,10 +123,9 @@ public class PlayerController : MonoBehaviour
 
     private void ConfigureRigidbody()
     {
-        // 넉백 물리(AddForce)를 받기 위해 Dynamic 유지
         rb.bodyType = RigidbodyType2D.Dynamic;
         rb.gravityScale = 0f;
-        rb.linearDamping = 4f; // 넉백 후 자연스럽게 감속
+        rb.linearDamping = 4f;
         rb.freezeRotation = true;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         rb.interpolation = RigidbodyInterpolation2D.Interpolate;
@@ -162,7 +167,7 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// [2단계: ASDF 입력 버퍼링] 체공 중 입력 키 저장 및 플레이어 머리 위 UI 팝업
+    /// [2단계: ASDF 입력 버퍼링] 체공 중 입력 키 저장 및 머리 위 UI 팝업
     /// </summary>
     private void HandleAttackBufferInput(KeyCode key)
     {
@@ -186,8 +191,13 @@ public class PlayerController : MonoBehaviour
         bufferedKey = null;
         HideBufferedKeyPopup();
 
-        // 1. 체공 시작 시 타임 슬로우 (Bullet Time: 0.3x)
+        // 1. 체공 시작: 타임 슬로우 & 잔상 궤적(Trail) 켜기
         Time.timeScale = slowMoScale;
+        if (dashTrail != null)
+        {
+            dashTrail.Clear();
+            dashTrail.emitting = true;
+        }
 
         dashStartPos = transform.position;
         currentVelocity = Vector2.zero;
@@ -199,7 +209,6 @@ public class PlayerController : MonoBehaviour
 
         float elapsed = 0f;
 
-        // unscaledDeltaTime을 사용하여 슬로우 모션 중에도 일정한 체공 시간 유지
         while (elapsed < dashDuration)
         {
             if (target == null || target.IsDead) break;
@@ -220,18 +229,22 @@ public class PlayerController : MonoBehaviour
             transform.position = target.transform.position + (Vector3)strikeOffset;
         }
 
-        // 2. 도착 순간 타임 슬로우 해제
+        // 2. 도착 순간: 타임 슬로우 해제 & 잔상 궤적(Trail) 끄기
         Time.timeScale = 1.0f;
         isDashing = false;
         dashCoroutine = null;
         HideBufferedKeyPopup();
+        if (dashTrail != null)
+        {
+            dashTrail.emitting = false;
+        }
 
         // [3단계: 도착 및 처형 분기 / 실패 판정]
         ExecuteBufferedAttack(target);
     }
 
     /// <summary>
-    /// [3단계 & 4단계: 도착 및 처형 분기 / 전투 실패 넉백 및 적 즉각 반격]
+    /// [3단계 & 4단계: 도착 및 처형 분기 / 카메라 쉐이크 및 피드백 연동]
     /// </summary>
     private void ExecuteBufferedAttack(Enemy target)
     {
@@ -250,10 +263,12 @@ public class PlayerController : MonoBehaviour
             ResetCombo();
             Debug.Log("<color=#FF4444>[Attack: FAIL] 챙! 튕겨나감! (Stun & Knockback)</color>");
 
-            // 1. 역경직 (챙! 하는 느낌)
+            // 1. 역경직 & 중간 카메라 쉐이크 (챙! 충돌 느낌)
             TriggerHitStop(hitStopDuration);
+            CameraShakeManager.Instance?.Shake(0.5f, 0.2f);
+            if (flashEffect != null) flashEffect.FlashRed(0.15f);
 
-            // 2. 물리 넉백 계산 및 적용 (적 반대 방향)
+            // 2. 물리 넉백 계산 및 적용
             Vector2 recoilDir = ((Vector2)transform.position - (Vector2)target.transform.position).normalized;
             if (recoilDir.sqrMagnitude < 0.01f) recoilDir = -dashDir;
 
@@ -267,7 +282,7 @@ public class PlayerController : MonoBehaviour
             // 3. 0.35초간 조작 불가 스턴
             StartStun(stunDuration);
 
-            // 4. 적의 즉각 반격 트리거 (튕겨나간 플레이어를 향해 즉시 탄환 발사!)
+            // 4. 적의 즉각 반격 트리거
             target.TriggerImmediateCounterAttack();
             return;
         }
@@ -278,6 +293,9 @@ public class PlayerController : MonoBehaviour
         currentCombo++;
         lastHitTime = Time.time;
         OnComboChanged?.Invoke(currentCombo);
+
+        // 처형 성공 가벼운 카메라 쉐이크
+        CameraShakeManager.Instance?.Shake(0.25f, 0.12f);
 
         // ASDF 처형 분기
         switch (attackKey)
@@ -324,9 +342,6 @@ public class PlayerController : MonoBehaviour
         OnBlinkExecuted?.Invoke(target, attackKey);
     }
 
-    /// <summary>
-    /// 공격 실패 시 플레이어 조작 불가 스턴 코루틴
-    /// </summary>
     private void StartStun(float duration)
     {
         if (stunCoroutine != null) StopCoroutine(stunCoroutine);
@@ -342,7 +357,7 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 투사체에 피격되었을 때 데미지 처리
+    /// 투사체에 피격되었을 때 데미지 처리 및 붉은색 플래시 & 강한 카메라 쉐이크
     /// </summary>
     public void TakeDamage(float damage)
     {
@@ -350,6 +365,11 @@ public class PlayerController : MonoBehaviour
 
         currentHealth -= damage;
         Debug.Log($"[PlayerController] <color=#FF2222>💥 [DAMAGE] Hit by projectile!</color> Remaining HP: {currentHealth}/{maxHealth}");
+
+        // 피격 시각 피드백: 붉은색 플래시 & 화면 흔들림
+        if (flashEffect != null) flashEffect.FlashRed(0.15f);
+        CameraShakeManager.Instance?.Shake(0.8f, 0.25f);
+
         OnHealthChanged?.Invoke(currentHealth);
 
         if (currentHealth <= 0)
@@ -363,13 +383,11 @@ public class PlayerController : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
-        Debug.Log("<color=#FF0000>💀 [GAME OVER] Player was killed by enemy projectiles! 💀</color>");
+        Debug.Log("<color=#FF0000>💀 [GAME OVER] Player was killed! 💀</color>");
+        CameraShakeManager.Instance?.Shake(1.2f, 0.45f);
         OnPlayerDied?.Invoke();
     }
 
-    /// <summary>
-    /// 처형 성공/실패 시 0.05초간 멈추는 역경직(Hit-Stop) 발동
-    /// </summary>
     private void TriggerHitStop(float duration)
     {
         if (hitStopCoroutine != null) StopCoroutine(hitStopCoroutine);
@@ -382,6 +400,36 @@ public class PlayerController : MonoBehaviour
         yield return new WaitForSecondsRealtime(duration);
         Time.timeScale = 1.0f;
         hitStopCoroutine = null;
+    }
+
+    private void SetupDashTrail()
+    {
+        if (dashTrail == null)
+        {
+            dashTrail = GetComponentInChildren<TrailRenderer>();
+            if (dashTrail == null)
+            {
+                GameObject trailObj = new GameObject("DashTrail");
+                trailObj.transform.SetParent(transform);
+                trailObj.transform.localPosition = Vector3.zero;
+
+                dashTrail = trailObj.AddComponent<TrailRenderer>();
+                dashTrail.time = 0.2f;
+                dashTrail.startWidth = 0.7f;
+                dashTrail.endWidth = 0.05f;
+                dashTrail.minVertexDistance = 0.05f;
+                dashTrail.sortingOrder = 1;
+
+                // 네온 시안 -> 네온 마젠타 페이드 그라디언트
+                Gradient gradient = new Gradient();
+                gradient.SetKeys(
+                    new GradientColorKey[] { new GradientColorKey(new Color(0f, 1f, 1f), 0.0f), new GradientColorKey(new Color(1f, 0f, 0.8f), 1.0f) },
+                    new GradientAlphaKey[] { new GradientAlphaKey(0.8f, 0.0f), new GradientAlphaKey(0.0f, 1.0f) }
+                );
+                dashTrail.colorGradient = gradient;
+            }
+        }
+        dashTrail.emitting = false;
     }
 
     private void SetupBufferedKeyDisplay()

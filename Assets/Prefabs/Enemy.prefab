@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 23398328549435454}
   - component: {fileID: 7262067834267379406}
   - component: {fileID: 397279906504287342}
+  - component: {fileID: 6406684758664161175}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -123,6 +124,18 @@ MonoBehaviour:
   projectilePrefab: {fileID: 2469508483415249028, guid: a321bd61cfc9c48b0b546891c6f8d533, type: 3}
   attackInterval: 1.8
   projectileSpeed: 3.5
+--- !u!114 &6406684758664161175
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1743807304868393653}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7ee391ab04344eeabf65921e9bbfad0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FlashEffect
 --- !u!1 &8294446786506713491
 GameObject:
   m_ObjectHideFlags: 0

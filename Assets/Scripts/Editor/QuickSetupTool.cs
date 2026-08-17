@@ -174,8 +174,9 @@ public static class QuickSetupTool
         sr.sortingOrder = 1;
         tempEnemy.transform.localScale = new Vector3(1.2f, 1.2f, 1f);
 
-        // Enemy 컴포넌트 추가
+        // Enemy 및 FlashEffect 컴포넌트 추가
         Enemy enemyComp = tempEnemy.AddComponent<Enemy>();
+        tempEnemy.AddComponent<FlashEffect>();
 
         // 투사체 프리팹 생성 및 바인딩
         GameObject projPrefab = SetupProjectilePrefab();
@@ -265,6 +266,12 @@ public static class QuickSetupTool
             managersObj.AddComponent<AlarmUIManager>();
         }
 
+        // CameraShakeManager 확인 및 추가
+        if (!managersObj.TryGetComponent<CameraShakeManager>(out _))
+        {
+            managersObj.AddComponent<CameraShakeManager>();
+        }
+
         // Enemy Prefab 바인딩
         if (enemyPrefab != null)
         {
@@ -274,7 +281,7 @@ public static class QuickSetupTool
             serializedWave.ApplyModifiedProperties();
         }
 
-        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager, AlarmUIManager) 구성 완료");
+        Debug.Log("[QuickSetup] @Managers (InputManager, WaveManager, AlarmUIManager, CameraShakeManager) 구성 완료");
     }
 
     private static void SetupPlayer()
@@ -309,6 +316,12 @@ public static class QuickSetupTool
             col.isTrigger = false;
         }
         playerObj.tag = "Player";
+
+        // FlashEffect 추가
+        if (!playerObj.TryGetComponent<FlashEffect>(out _))
+        {
+            playerObj.AddComponent<FlashEffect>();
+        }
 
         // PlayerController & SkillModuleSystem
         if (!playerObj.TryGetComponent<PlayerController>(out _))

@@ -477,17 +477,18 @@ public class Enemy : MonoBehaviour
     {
         if (spriteRenderer == null) return;
 
-        switch (currentState)
+        Color targetColor = currentState switch
         {
-            case EnemyState.Patrol:
-                spriteRenderer.color = new Color(1f, 0.35f, 0.35f); // 기본 오렌지레드
-                break;
-            case EnemyState.Alert:
-                spriteRenderer.color = new Color(1f, 0.85f, 0.1f); // 경계 옐로우
-                break;
-            case EnemyState.Chase:
-                spriteRenderer.color = new Color(1f, 0.1f, 0.1f); // 추격 딥레드
-                break;
+            EnemyState.Patrol => new Color(1f, 0.35f, 0.35f), // 기본 오렌지레드
+            EnemyState.Alert => new Color(1f, 0.85f, 0.1f),   // 경계 옐로우
+            EnemyState.Chase => new Color(1f, 0.1f, 0.1f),    // 추격 딥레드
+            _ => new Color(1f, 0.35f, 0.35f)
+        };
+
+        spriteRenderer.color = targetColor;
+        if (TryGetComponent<FlashEffect>(out var flash))
+        {
+            flash.SetOriginalColor(targetColor);
         }
     }
 
@@ -544,6 +545,12 @@ public class Enemy : MonoBehaviour
     public void TakeBlinkHit(float damage = 1f)
     {
         if (isDead) return;
+
+        // 처형 타격 시 순백색 번쩍임(White Flash)
+        if (TryGetComponent<FlashEffect>(out var flash))
+        {
+            flash.FlashWhite(0.1f);
+        }
 
         currentHealth -= damage;
 
